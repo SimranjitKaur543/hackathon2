@@ -5,7 +5,7 @@
 #  Every offer is checked against this file before it is sent; anything that breaks
 #  a rule is blocked and logged.
 #
-#  How to edit: change a number, save the file, restart the bot. Keep the spacing as it is.
+#  How to edit: change a number and save the file. The next offer uses the new rules. Keep the spacing as it is.
 #  (You can also change these from the dashboard without opening this file.)
 # =====================================================================================
 
