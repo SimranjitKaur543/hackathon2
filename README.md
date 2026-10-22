@@ -89,6 +89,10 @@ python bot.py                    # Telegram bot
 python dashboard.py              # dashboard at http://localhost:8501
 ```
 
+On Windows you can also just **double-click `run_bot.bat`** and **`run_dashboard.bat`**. `run_bot.bat` installs
+anything missing, creates the data if needed, and **restarts the bot automatically** if it ever stops. Messages
+sent while the bot was offline are answered when it comes back, and the admin gets a "✅ Bot is online" message.
+
 **4. Run the tests:**
 
 ```bash

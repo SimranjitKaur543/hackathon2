@@ -273,6 +273,11 @@ async def post_init(app: Application) -> None:
         BotCommand("start", "Pick your shopper"), BotCommand("offer", "See your personalised offer"),
         BotCommand("profile", "Who you are playing"), BotCommand("switch", "Play a different shopper"),
     ])
+    if ADMIN_ID:  # lets the admin know the bot came back after a restart or a Wi-Fi drop
+        try:
+            await app.bot.send_message(ADMIN_ID, f"✅ Bot is online ({datetime.now():%d %b %H:%M})")
+        except Exception as e:
+            log.warning("Could not notify admin: %s", e)
 
 
 def main() -> None:
@@ -296,7 +301,9 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(respond, pattern=r"^(claim|decline):\d+$"))
     app.add_error_handler(on_error)
     log.info("Bot is running. Press Ctrl+C to stop.")
-    app.run_polling(drop_pending_updates=True)
+    # bootstrap_retries=-1: if the internet is down at startup, keep trying instead of crashing.
+    # Messages sent while the bot was offline are still answered (Telegram keeps them for 24 hours).
+    app.run_polling(bootstrap_retries=-1)
 
 
 if __name__ == "__main__":
