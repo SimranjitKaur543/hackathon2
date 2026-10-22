@@ -1,0 +1,103 @@
+# =====================================================================================
+#  OFFER ENGINE RULES  —  edit this file to control every offer the system sends
+# =====================================================================================
+#  The AI chooses and writes offers, but it can NEVER go past the limits below.
+#  Every offer is checked against this file before it is sent; anything that breaks
+#  a rule is blocked and logged.
+#
+#  How to edit: change a number, save the file, restart the bot. Keep the spacing as it is.
+#  (You can also change these from the dashboard without opening this file.)
+# =====================================================================================
+
+campaign:
+  total_budget_rs: 50000            # Total discount money (₹) this campaign may give away
+  holdout_percent: 10               # % of customers who get NO offer, so we can measure if offers work
+  max_offers_per_customer_per_week: 1
+  offer_valid_days: 3               # How many days a coupon code stays valid
+  quiet_hours:                      # Never push offers between these times (India time)
+    start: "21:30"
+    end: "09:00"
+
+# -------------------------------------------------------------------------------------
+#  THE OFFER MENU — the only kinds of offer that can ever be sent
+# -------------------------------------------------------------------------------------
+offers:
+  percent_off:
+    label: "% off"
+    max_value: 25                   # Highest % off allowed for anyone, ever
+    max_discount_rs: 400            # A % offer can never save more than this many ₹
+    min_order_value_rs: 499         # Customer must spend at least this much to use it
+  flat_off:
+    label: "₹ off"
+    max_value: 300                  # Highest flat ₹ discount allowed
+    min_order_value_rs: 999
+  free_delivery:
+    label: "Free delivery"
+    cost_rs: 49                     # What one free delivery costs us
+    min_order_value_rs: 0
+  bonus_points:
+    label: "Bonus reward points"
+    max_value: 200                  # Most bonus points one offer can give
+    cost_per_point_rs: 0.25         # What one point costs us
+    min_order_value_rs: 299
+  cart_reminder:
+    label: "Cart reminder (no discount)"
+  no_offer:
+    label: "No offer"
+
+# -------------------------------------------------------------------------------------
+#  CUSTOMER TYPES — which offers each type may get, best choice first
+#  (if the AI fails, the first offer in the list is used as the safe default)
+# -------------------------------------------------------------------------------------
+segments:
+  loyal:                            # Buys often without coupons — a discount is wasted money
+    allowed_offers: [bonus_points, no_offer]
+  at_risk:                          # Used to buy, gone quiet for 2–5 months — worth winning back
+    allowed_offers: [percent_off, flat_off, free_delivery]
+    max_percent_off: 20
+    max_flat_off_rs: 250
+  lapsed:                           # Gone for 5+ months — one strong offer to try to bring them back
+    allowed_offers: [percent_off, flat_off]
+    max_percent_off: 25
+    max_flat_off_rs: 300
+  deal_hunter:                      # Almost only buys with coupons — keep discounts small
+    allowed_offers: [free_delivery, percent_off, bonus_points]
+    max_percent_off: 10
+  cart_abandoner:                   # Left items in the cart this week — a nudge is often enough
+    allowed_offers: [cart_reminder, free_delivery, percent_off]
+    max_percent_off: 10
+  new:                              # Just joined — help them make (another) first purchase
+    allowed_offers: [percent_off, free_delivery]
+    max_percent_off: 15
+  window_shopper:                   # Browses a lot, never buys — give a reason to try
+    allowed_offers: [flat_off, free_delivery, percent_off]
+    max_percent_off: 15
+    max_flat_off_rs: 150
+  regular:                          # Buys now and then — light touch
+    allowed_offers: [bonus_points, free_delivery, percent_off]
+    max_percent_off: 10
+
+# -------------------------------------------------------------------------------------
+#  CATEGORY LIMITS — protect profit on low-margin products
+# -------------------------------------------------------------------------------------
+categories:
+  fashion:     { max_percent_off: 25 }
+  footwear:    { max_percent_off: 25 }
+  beauty:      { max_percent_off: 20 }
+  home:        { max_percent_off: 20 }
+  electronics: { max_percent_off: 8 }    # Thin margins on electronics
+  grocery:     { max_percent_off: 8 }    # Thin margins on grocery
+
+# -------------------------------------------------------------------------------------
+#  MESSAGE RULES — what the AI is allowed to write
+# -------------------------------------------------------------------------------------
+message:
+  max_length: 350                   # Characters
+  banned_phrases:                   # Promises we never make
+    - guaranteed
+    - lowest price ever
+    - cashback
+    - free gift
+    - 100% off
+    - lifetime
+    - only for today
