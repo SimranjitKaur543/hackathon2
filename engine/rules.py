@@ -2,6 +2,9 @@
 from pathlib import Path
 
 import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 from engine.segments import SEGMENT_ORDER
 
@@ -26,10 +29,38 @@ def load_rules(path: Path = RULES_PATH) -> dict:
 
 
 def save_rules(rules: dict, path: Path = RULES_PATH) -> None:
-    """Used by the dashboard. Validates first so a bad edit never reaches the bot."""
+    """Used by the dashboard. Validates first so a bad edit never reaches the bot, and keeps the
+    explanatory comments in rules.yaml intact."""
     validate_rules(rules)
+    rt = YAML()
+    rt.preserve_quotes = True
+    rt.width = 120
+    with open(path, encoding="utf-8") as f:
+        doc = rt.load(f)
+    _merge(doc, rules)
     with open(path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(rules, f, sort_keys=False, allow_unicode=True)
+        rt.dump(doc, f)
+
+
+def _merge(doc: CommentedMap, new: dict) -> None:
+    """Copy `new` into the round-trip document, touching only values that changed."""
+    for key in [k for k in doc if k not in new]:
+        del doc[key]
+    for key, value in new.items():
+        old = doc.get(key)
+        if isinstance(value, dict) and isinstance(old, dict):
+            _merge(old, value)
+        elif old == value:
+            continue
+        elif isinstance(value, list):
+            seq = CommentedSeq(value)
+            if isinstance(old, CommentedSeq) and old.fa.flow_style():
+                seq.fa.set_flow_style()
+            doc[key] = seq
+        elif isinstance(value, str):
+            doc[key] = DoubleQuotedScalarString(value)  # keeps "21:30" a string, not a number
+        else:
+            doc[key] = value
 
 
 def validate_rules(r: dict) -> None:

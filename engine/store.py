@@ -50,6 +50,20 @@ def load_customer(conn: sqlite3.Connection, customer_id: int) -> dict:
     return f
 
 
+def load_all_customers(conn: sqlite3.Connection) -> list[dict]:
+    """Every customer in the same shape as load_customer (without order history), for what-if previews."""
+    items: dict[int, list[dict]] = {}
+    for r in conn.execute("SELECT customer_id, product, category, price FROM cart_items"):
+        items.setdefault(r["customer_id"], []).append(dict(product=r["product"], category=r["category"], price=r["price"]))
+    customers = []
+    for r in conn.execute("SELECT f.*, c.name, c.city FROM customer_features f JOIN customers c USING(customer_id)"):
+        f = dict(r)
+        f["cart_items"] = items.get(f["customer_id"], [])
+        f["cart_categories"] = [i["category"] for i in f["cart_items"]]
+        customers.append(f)
+    return customers
+
+
 def pick_customer(conn: sqlite3.Connection, segment: str | None) -> int:
     """A random customer of the chosen type that no classmate is playing yet."""
     segment = segment if segment in SEGMENT_ORDER else None

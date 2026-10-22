@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offer Engine</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎁</text></svg>">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f5f2; --surface: #fcfcfb; --border: #e3e1db; --track: #eeede8;
+    --text: #0b0b0b; --text-2: #52514e; --muted: #7b7a74;
+    --series: #2a78d6; --accent: #2a78d6; --accent-ink: #ffffff;
+    --good: #0b7d0b; --good-bg: #e6f4e6; --bad: #b42828; --bad-bg: #fbeaea; --warn-bg: #fff4dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #111110; --surface: #1a1a19; --border: #33332f; --track: #262624;
+      --text: #f0efec; --text-2: #c3c2b7; --muted: #94938b;
+      --series: #3987e5; --accent: #3987e5; --accent-ink: #ffffff;
+      --good: #4cc24c; --good-bg: #13301a; --bad: #f08080; --bad-bg: #3a1717; --warn-bg: #3a2e10;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #33332f; --track: #262624;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #94938b;
+    --series: #3987e5; --accent: #3987e5; --accent-ink: #ffffff;
+    --good: #4cc24c; --good-bg: #13301a; --bad: #f08080; --bad-bg: #3a1717; --warn-bg: #3a2e10;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+  header h1 { margin: 0; font-size: 26px; }
+  header p { margin: 4px 0 20px; color: var(--text-2); }
+  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow-x: auto; }
+  nav button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px;
+               font: inherit; color: var(--text-2); cursor: pointer; white-space: nowrap; }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .tab { display: none; } .tab.active { display: block; }
+  h2 { font-size: 18px; margin: 28px 0 12px; }
+  .muted { color: var(--muted); } .small { font-size: 13px; }
+  .grid { display: grid; gap: 16px; }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
+  .kpi .label { color: var(--text-2); font-size: 13px; }
+  .kpi .value { font-size: 28px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .kpi .note { color: var(--muted); font-size: 12px; }
+  .callout { background: var(--surface); border-left: 4px solid var(--accent); padding: 12px 16px; border-radius: 8px; margin: 16px 0; }
+  .progress { height: 10px; background: var(--track); border-radius: 6px; overflow: hidden; margin-top: 8px; }
+  .progress > div { height: 100%; background: var(--series); border-radius: 6px; }
+
+  /* Horizontal bars */
+  .hbar { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: 6px 10px; align-items: center; }
+  .hbar .lbl { color: var(--text-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hbar .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .hbar .fill { height: 20px; background: var(--series); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .hbar .val { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* Column bars */
+  .cols { display: flex; align-items: flex-end; gap: 2px; height: 200px; border-bottom: 1px solid var(--border); }
+  .cols .c { flex: 1; background: var(--series); border-radius: 4px 4px 0 0; min-height: 1px; }
+  .cols .c:hover, .hbar .fill:hover { opacity: .8; }
+  .axis { display: flex; gap: 2px; margin-top: 4px; }
+  .axis span { flex: 1; font-size: 11px; color: var(--muted); text-align: center; overflow: hidden; white-space: nowrap; }
+  #tip { position: fixed; pointer-events: none; background: var(--text); color: var(--bg); padding: 6px 9px;
+         border-radius: 6px; font-size: 12px; display: none; z-index: 10; max-width: 260px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text-2); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+  .scroll { overflow: auto; max-height: 460px; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; background: var(--track); white-space: nowrap; }
+  .pill.claimed { background: var(--good-bg); color: var(--good); }
+  .pill.declined { background: var(--bad-bg); color: var(--bad); }
+
+  label { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 4px; }
+  input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+                            background: var(--surface); color: var(--text); font: inherit; }
+  textarea { min-height: 84px; resize: vertical; }
+  .fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .seg-row { display: grid; grid-template-columns: 170px 1fr 110px 110px; gap: 10px; align-items: start;
+             padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .seg-row:last-child { border-bottom: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips label { display: inline-flex; align-items: center; gap: 5px; margin: 0; padding: 4px 10px; border: 1px solid var(--border);
+                 border-radius: 99px; cursor: pointer; color: var(--text); background: var(--surface); }
+  .chips input { width: auto; margin: 0; }
+  .chips label:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+  button.btn { padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+               color: var(--text); font: inherit; cursor: pointer; }
+  button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.btn:disabled { opacity: .5; cursor: not-allowed; }
+  .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 20px; position: sticky; bottom: 0;
+             background: var(--bg); padding: 12px 0; border-top: 1px solid var(--border); }
+  .msg { padding: 10px 14px; border-radius: 8px; margin-top: 12px; white-space: pre-wrap; }
+  .msg.ok { background: var(--good-bg); color: var(--good); } .msg.bad { background: var(--bad-bg); color: var(--bad); }
+  .msg.warn { background: var(--warn-bg); }
+  ul.tight { margin: 6px 0; padding-left: 18px; }
+  @media (max-width: 640px) {
+    .seg-row { grid-template-columns: 1fr 1fr; } .seg-row > :nth-child(2) { grid-column: 1 / -1; order: 3; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎁 Offer Engine</h1>
+    <p>Bazaarly · personalised offers chosen by AI and checked against marketing rules before they're sent</p>
+  </header>
+  <nav>
+    <button data-tab="results" class="active">📊 Results</button>
+    <button data-tab="safety">🛡️ Safety check</button>
+    <button data-tab="rules">⚙️ Rules</button>
+    <button data-tab="customers">👥 Customers</button>
+  </nav>
+
+  <!-- RESULTS -->
+  <section class="tab active" id="tab-results">
+    <div class="grid kpis" id="r-kpis"></div>
+    <div class="card" style="margin-top:16px"><div id="r-budget"></div></div>
+    <div id="r-callout"></div>
+    <div class="grid two" style="margin-top:8px">
+      <div class="card"><h2 style="margin-top:0">Claim rate by customer type</h2><div id="r-seg"></div></div>
+      <div class="card"><h2 style="margin-top:0">Offers by type</h2><div id="r-mix"></div></div>
+    </div>
+    <h2>Latest offers</h2>
+    <div class="card scroll" id="r-latest"></div>
+  </section>
+
+  <!-- SAFETY -->
+  <section class="tab" id="tab-safety">
+    <p>Every offer passes a <b>rules check written in plain Python</b> before it's sent. If the AI breaks a rule it is
+       told what was wrong and tries once more; if it fails again, a safe rule-based default is sent instead.</p>
+    <div class="grid kpis" id="s-kpis"></div>
+    <h2>Blocked AI answers</h2>
+    <div class="card scroll" id="s-blocked"></div>
+    <div id="s-errors"></div>
+    <h2>🧪 Try to break the rules</h2>
+    <p class="muted small">Write any offer for a sample customer and see what the safety check says.</p>
+    <div class="grid two">
+      <div class="card">
+        <label for="t-seg">Customer type</label><select id="t-seg"></select>
+        <div id="t-customer" style="margin-top:12px"></div>
+      </div>
+      <div class="card">
+        <div class="fields">
+          <div><label for="t-type">Offer</label><select id="t-type"></select></div>
+          <div><label for="t-cat">Category</label><select id="t-cat"></select></div>
+          <div><label for="t-val">Value (%, ₹ or points)</label><input id="t-val" type="number" min="0" value="30"></div>
+        </div>
+        <label for="t-msg" style="margin-top:12px">Message</label>
+        <textarea id="t-msg"></textarea>
+        <button class="btn primary" id="t-check" style="margin-top:12px">Check it</button>
+        <div id="t-result"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RULES -->
+  <section class="tab" id="tab-rules">
+    <p>Change the limits and press <b>Save rules</b>. The bot uses the new rules for the very next offer.
+       Press <b>Preview</b> first to see what the change would do across all 2,000 customers.</p>
+    <div id="rules-form"></div>
+    <div class="actions">
+      <button class="btn" id="btn-preview">👀 Preview</button>
+      <button class="btn primary" id="btn-save" disabled>💾 Save rules</button>
+      <button class="btn" id="btn-reset">Undo changes</button>
+      <span id="rules-status" class="small muted"></span>
+    </div>
+    <div id="rules-msg"></div>
+    <div id="preview"></div>
+  </section>
+
+  <!-- CUSTOMERS -->
+  <section class="tab" id="tab-customers">
+    <p>2,000 made-up customers with 18 months of history. The engine sorts them into types <b>from behaviour only</b>;
+       each also has a hidden "true" persona, used only to measure how well that sorting works.</p>
+    <div class="grid kpis" id="c-kpis"></div>
+    <div class="grid two" style="margin-top:16px">
+      <div class="card"><h2 style="margin-top:0">Customers by type</h2><div id="c-seg"></div></div>
+      <div class="card"><h2 style="margin-top:0">Cash on delivery by city tier</h2>
+        <p class="muted small" style="margin-top:-6px">Smaller cities rely more on cash, as in real Indian e-commerce.</p><div id="c-cod"></div></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h2 style="margin-top:0">Orders per month</h2>
+      <p class="muted small" style="margin-top:-6px">Spikes line up with sale seasons: festive & Diwali (Oct–Nov), Republic Day (Jan), end of season (Jun–Jul).</p>
+      <div id="c-monthly"></div></div>
+    <div class="card" style="margin-top:16px"><h2 style="margin-top:0">How much customers spend (18 months)</h2>
+      <p class="muted small" style="margin-top:-6px">A long tail: most spend a little, a few spend a lot.</p>
+      <div id="c-spend"></div></div>
+    <h2>Look up a customer</h2>
+    <div class="grid two">
+      <div class="card"><label for="c-id">Customer ID (1–2000)</label>
+        <input id="c-id" type="number" min="1" max="2000" value="1"><div id="c-profile" style="margin-top:12px"></div></div>
+      <div class="card" id="c-menu"></div>
+    </div>
+  </section>
+</div>
+<div id="tip"></div>
+
+<script>
+const OFFER = { percent_off: "% off", flat_off: "₹ off", free_delivery: "Free delivery", bonus_points: "Bonus points",
+                cart_reminder: "Cart reminder", no_offer: "No offer", holdout: "Control group" };
+const CATS = ["fashion", "footwear", "beauty", "home", "electronics", "grocery", "all", "cart"];
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pct = (x) => x == null ? "–" : `${Math.round(x * 100)}%`;
+const rs = (x) => `₹${Math.round(x).toLocaleString("en-IN")}`;
+const api = async (path, body) => {
+  const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+};
+
+/* ---------- tiny chart + UI helpers ---------- */
+const tip = $("#tip");
+document.addEventListener("mousemove", (e) => {
+  const t = e.target.closest("[data-tip]");
+  if (!t) { tip.style.display = "none"; return; }
+  tip.textContent = t.dataset.tip;
+  tip.style.display = "block";
+  tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = (e.clientY + 14) + "px";
+});
+
+function kpis(el, items) {
+  el.innerHTML = items.map(([label, value, note]) =>
+    `<div class="card kpi"><div class="label">${label}</div><div class="value">${value}</div>${note ? `<div class="note">${note}</div>` : ""}</div>`).join("");
+}
+function hbar(el, data, fmt = (v) => v.toLocaleString("en-IN"), tipFn) {
+  if (!data.length) { el.innerHTML = `<p class="muted small">No data yet.</p>`; return; }
+  const max = Math.max(...data.map((d) => d.value), 1e-9);
+  el.innerHTML = `<div class="hbar">` + data.map((d) => `
+    <div class="lbl" title="${esc(d.label)}">${esc(d.label)}</div>
+    <div class="row"><div class="fill" style="width:${(d.value / max) * 85}%" data-tip="${esc(tipFn ? tipFn(d) : `${d.label}: ${fmt(d.value)}`)}"></div>
+    <span class="val">${fmt(d.value)}</span></div>`).join("") + `</div>`;
+}
+function cols(el, data, fmt = (v) => v.toLocaleString("en-IN"), every = 1) {
+  const max = Math.max(...data.map((d) => d.value), 1);
+  el.innerHTML = `<div class="cols">` + data.map((d) =>
+      `<div class="c" style="height:${(d.value / max) * 100}%" data-tip="${esc(d.label)}: ${fmt(d.value)}"></div>`).join("") +
+    `</div><div class="axis">` + data.map((d, i) => `<span>${i % every === 0 ? esc(d.label) : ""}</span>`).join("") + `</div>`;
+}
+function table(el, headers, rows) {
+  el.innerHTML = rows.length
+    ? `<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
+      rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("") + `</tbody></table>`
+    : `<p class="muted small" style="margin:0">Nothing here yet.</p>`;
+}
+const menuList = (menu) => `<ul class="tight">` + menu.map((m) =>
+  `<li>${OFFER[m.offer_type]} (${esc(m.category)})${m.max_value ? `, up to ${m.max_value}` : ""}</li>`).join("") + `</ul>`;
+
+/* ---------- tabs ---------- */
+const loaders = {};
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("active", x === b));
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === `tab-${b.dataset.tab}`));
+  loaders[b.dataset.tab]?.();
+}));
+
+/* ---------- results ---------- */
+loaders.results = async () => {
+  const d = await api("/api/results");
+  kpis($("#r-kpis"), [
+    ["Players on Telegram", d.players],
+    ["Offers sent", d.sent],
+    ["Claim rate", pct(d.claim_rate), `${d.claimed} of ${d.sent} claimed`],
+    ["Control group click rate", pct(d.control_rate), `${d.control_clicked} of ${d.control} got no offer and clicked anyway`],
+    ["Written by AI", pct(d.ai_share), "the rest used the safe default"],
+  ]);
+  const share = d.budget ? d.spent / d.budget : 0;
+  $("#r-budget").innerHTML = `<b>Budget committed:</b> ${rs(d.spent)} of ${rs(d.budget)} (${(share * 100).toFixed(1)}%)
+    <div class="progress"><div style="width:${Math.min(share, 1) * 100}%"></div></div>`;
+  $("#r-callout").innerHTML = d.sent && d.control
+    ? `<div class="callout"><b>Do offers work?</b> People who got an offer claimed it <b>${pct(d.claim_rate)}</b> of the time,
+       vs <b>${pct(d.control_rate)}</b> clicks in the control group: a difference of
+       <b>${((d.claim_rate - d.control_rate) * 100).toFixed(0)} percentage points</b>${d.sent + d.control < 30 ? " (small sample so far)" : ""}.</div>`
+    : d.sent ? "" : `<div class="callout">No offers yet. Share the bot link with classmates: everyone who presses /start gets an offer.</div>`;
+  hbar($("#r-seg"), d.by_segment, pct, (s) => `${s.label}: ${s.claimed} of ${s.sent} claimed (${pct(s.value)})`);
+  hbar($("#r-mix"), d.by_offer.map((o) => ({ label: OFFER[o.label] || o.label, value: o.value })));
+  table($("#r-latest"), ["Sent", "Player", "Type", "Offer", "By", "Status", "Message", "Why"], d.latest.map((o) => [
+    esc(o.sent_at.replace("T", " ").slice(5, 16)), esc(o.first_name), esc(o.segment_label),
+    `${OFFER[o.offer_type] || o.offer_type}${o.value ? " " + o.value : ""}${o.category && !["all", "none", "cart"].includes(o.category) ? " " + esc(o.category) : ""}`,
+    o.source === "ai" ? "🤖 AI" : "📏 default", `<span class="pill ${o.status}">${esc(o.status)}</span>`,
+    esc(o.message), `<span class="muted">${esc(o.reason)}</span>`]));
+};
+
+/* ---------- safety ---------- */
+loaders.safety = async () => {
+  const d = await api("/api/safety");
+  kpis($("#s-kpis"), [
+    ["AI answers that passed", d.passed],
+    ["AI answers blocked by rules", d.blocked_count],
+    ["Times AI was unavailable", d.errors_count, "e.g. no API credits; the safe default was sent"],
+  ]);
+  table($("#s-blocked"), ["Time", "Type", "AI proposed", "Message", "Why it was blocked"], d.blocked.map((r) => [
+    esc(r.at.replace("T", " ").slice(5, 16)), esc(r.segment_label),
+    r.decision ? `${OFFER[r.decision.offer_type] || esc(r.decision.offer_type)} ${esc(r.decision.value)} ${esc(r.decision.category)}` : "–",
+    esc(r.decision?.message), `<ul class="tight">${r.violations.map((v) => `<li>${esc(v)}</li>`).join("")}</ul>`]));
+  $("#s-errors").innerHTML = d.errors_count
+    ? `<details style="margin-top:12px"><summary class="small">AI unavailable (${d.errors_count} times)</summary>
+       <div class="card small" style="margin-top:8px">${d.errors.map((r) => esc(r.violations[0]).slice(0, 220)).join("<br>")}</div></details>` : "";
+  if (!$("#t-seg").options.length) initTryIt(await api("/api/rules"));
+};
+
+let sample = null;
+function initTryIt(meta) {
+  $("#t-seg").innerHTML = meta.segments.map((s) => `<option value="${s}">${esc(meta.segment_labels[s])}</option>`).join("");
+  $("#t-type").innerHTML = meta.offer_types.filter((t) => t !== "no_offer").map((t) => `<option value="${t}">${OFFER[t]}</option>`).join("");
+  $("#t-cat").innerHTML = CATS.map((c) => `<option>${c}</option>`).join("");
+  $("#t-seg").addEventListener("change", loadSample);
+  $("#t-check").addEventListener("click", async () => {
+    const r = await api("/api/check", { customer_id: sample.customer.customer_id, offer_type: $("#t-type").value,
+      category: $("#t-cat").value, value: Number($("#t-val").value || 0), message: $("#t-msg").value });
+    $("#t-result").innerHTML = r.ok
+      ? `<div class="msg ok">✅ Passes every rule. Estimated cost ${rs(r.cost)}.</div>`
+      : `<div class="msg bad">🚫 Blocked:<ul class="tight">${r.violations.map((v) => `<li>${esc(v)}</li>`).join("")}</ul></div>`;
+  });
+  loadSample();
+}
+async function loadSample() {
+  sample = await api(`/api/sample?segment=${$("#t-seg").value}`);
+  const c = sample.customer, first = c.name.split(" ")[0];
+  $("#t-customer").innerHTML = `<b>${esc(c.name)}</b> · ${esc(c.city)} · favourite: ${esc(c.top_category)}` +
+    (c.cart_items.length ? `<br>🛒 ${c.cart_items.map((i) => esc(i.product)).join(", ")}` : "") +
+    `<p class="small" style="margin:10px 0 0"><b>Allowed for this customer:</b></p>${menuList(sample.menu)}`;
+  $("#t-cat").value = c.top_category;
+  $("#t-msg").value = `Hi ${first}! Grab 30% off ${c.top_category}, guaranteed lowest price ever!`;
+  $("#t-result").innerHTML = "";
+}
+
+/* ---------- rules editor ---------- */
+let saved = null, draft = null, meta = null;
+const num = (id, label, get, set, step = 1, help = "") => ({ id, label, get, set, step, help });
+
+function renderRules() {
+  const r = draft, c = r.campaign, o = r.offers;
+  const field = (f) => `<div><label for="${f.id}">${f.label}</label>
+    <input id="${f.id}" type="${f.text ? "text" : "number"}" ${f.text ? "" : `min="0" step="${f.step}"`} value="${esc(f.get())}">
+    ${f.help ? `<div class="muted small">${f.help}</div>` : ""}</div>`;
+  const groups = {
+    "Campaign": [
+      num("total_budget", "Total budget (₹)", () => c.total_budget_rs, (v) => c.total_budget_rs = v, 1000),
+      num("holdout", "Control group (%)", () => c.holdout_percent, (v) => c.holdout_percent = v, 1, "get no offer, so we can measure"),
+      num("cap", "Max offers per person per week", () => c.max_offers_per_customer_per_week, (v) => c.max_offers_per_customer_per_week = v),
+      num("valid", "Code valid for (days)", () => c.offer_valid_days, (v) => c.offer_valid_days = v),
+      { ...num("q_start", "Quiet hours start", () => c.quiet_hours.start, (v) => c.quiet_hours.start = v), text: true },
+      { ...num("q_end", "Quiet hours end", () => c.quiet_hours.end, (v) => c.quiet_hours.end = v), text: true },
+    ],
+    "Offer limits": [
+      num("pct_max", "Max % off (anyone)", () => o.percent_off.max_value, (v) => o.percent_off.max_value = v),
+      num("pct_cap", "Max ₹ saved by a % offer", () => o.percent_off.max_discount_rs, (v) => o.percent_off.max_discount_rs = v, 50),
+      num("pct_min", "Min order for % off (₹)", () => o.percent_off.min_order_value_rs, (v) => o.percent_off.min_order_value_rs = v, 50),
+      num("flat_max", "Max flat ₹ off", () => o.flat_off.max_value, (v) => o.flat_off.max_value = v, 50),
+      num("flat_min", "Min order for ₹ off (₹)", () => o.flat_off.min_order_value_rs, (v) => o.flat_off.min_order_value_rs = v, 50),
+      num("del_cost", "Cost of one free delivery (₹)", () => o.free_delivery.cost_rs, (v) => o.free_delivery.cost_rs = v),
+      num("pts_max", "Max bonus points", () => o.bonus_points.max_value, (v) => o.bonus_points.max_value = v, 10),
+      num("pts_cost", "Cost of one point (₹)", () => o.bonus_points.cost_per_point_rs, (v) => o.bonus_points.cost_per_point_rs = v, 0.05),
+    ],
+    "Category limits (protect margin)": Object.keys(r.categories).map((cat) =>
+      num(`cat_${cat}`, `Max % off ${cat}`, () => r.categories[cat].max_percent_off, (v) => r.categories[cat].max_percent_off = v)),
+  };
+  window.ruleFields = Object.values(groups).flat();
+
+  const segRows = meta.segments.map((s) => {
+    const seg = r.segments[s];
+    const chips = meta.offer_types.map((t) => `<label><input type="checkbox" data-seg="${s}" value="${t}" ${seg.allowed_offers.includes(t) ? "checked" : ""}>${OFFER[t]}</label>`).join("");
+    const pctBox = seg.allowed_offers.includes("percent_off")
+      ? `<div><label>Max %</label><input type="number" min="0" data-segmax="${s}:max_percent_off" value="${seg.max_percent_off ?? o.percent_off.max_value}"></div>` : "<div></div>";
+    const flatBox = seg.allowed_offers.includes("flat_off")
+      ? `<div><label>Max ₹ off</label><input type="number" min="0" step="50" data-segmax="${s}:max_flat_off_rs" value="${seg.max_flat_off_rs ?? o.flat_off.max_value}"></div>` : "<div></div>";
+    return `<div class="seg-row"><div><b>${esc(meta.segment_labels[s])}</b><div class="muted small">first ticked = safe default: ${OFFER[seg.allowed_offers[0]] || "–"}</div></div>
+      <div class="chips">${chips}</div>${pctBox}${flatBox}</div>`;
+  }).join("");
+
+  $("#rules-form").innerHTML =
+    Object.entries(groups).slice(0, 2).map(([title, fs]) => `<h2>${title}</h2><div class="card fields">${fs.map(field).join("")}</div>`).join("") +
+    `<h2>What each customer type may get</h2><div class="card">${segRows}</div>` +
+    `<h2>${Object.keys(groups)[2]}</h2><div class="card fields">${groups["Category limits (protect margin)"].map(field).join("")}</div>` +
+    `<h2>Message rules</h2><div class="card fields">
+       <div><label for="msg_len">Max characters</label><input id="msg_len" type="number" min="50" step="10" value="${r.message.max_length}"></div>
+       <div style="grid-column: span 2"><label for="banned">Banned phrases (one per line)</label><textarea id="banned">${esc(r.message.banned_phrases.join("\n"))}</textarea></div></div>`;
+  updateStatus();
+}
+
+$("#rules-form").addEventListener("input", (e) => {
+  const t = e.target;
+  const f = window.ruleFields.find((x) => x.id === t.id);
+  if (f) f.set(f.text ? t.value : Number(t.value));
+  else if (t.id === "msg_len") draft.message.max_length = Number(t.value);
+  else if (t.id === "banned") draft.message.banned_phrases = t.value.split("\n").map((s) => s.trim()).filter(Boolean);
+  else if (t.dataset.segmax) { const [s, k] = t.dataset.segmax.split(":"); draft.segments[s][k] = Number(t.value); }
+  else if (t.dataset.seg) {
+    // Keep the original order of offers (it decides the safe default); new ticks go to the end.
+    const seg = draft.segments[t.dataset.seg];
+    seg.allowed_offers = t.checked ? [...seg.allowed_offers, t.value] : seg.allowed_offers.filter((x) => x !== t.value);
+    if (!seg.allowed_offers.includes("percent_off")) delete seg.max_percent_off;
+    if (!seg.allowed_offers.includes("flat_off")) delete seg.max_flat_off_rs;
+    renderRules();
+    return;
+  }
+  updateStatus();
+});
+
+function updateStatus() {
+  const changed = JSON.stringify(draft) !== JSON.stringify(saved);
+  $("#btn-save").disabled = !changed;
+  $("#rules-status").textContent = changed ? "You have unsaved changes." : "No changes.";
+}
+
+loaders.rules = async () => {
+  if (saved) return;
+  const d = await api("/api/rules");
+  meta = d; saved = d.rules; draft = structuredClone(saved);
+  renderRules();
+};
+$("#btn-reset").addEventListener("click", () => { draft = structuredClone(saved); renderRules(); $("#rules-msg").innerHTML = ""; $("#preview").innerHTML = ""; });
+$("#btn-save").addEventListener("click", async () => {
+  try {
+    await api("/api/rules", draft);
+    saved = structuredClone(draft);
+    $("#rules-msg").innerHTML = `<div class="msg ok">✅ Saved. The next offer will use these rules.</div>`;
+    updateStatus();
+  } catch (e) { $("#rules-msg").innerHTML = `<div class="msg bad">${esc(e.message)}</div>`; }
+});
+$("#btn-preview").addEventListener("click", async () => {
+  $("#preview").innerHTML = `<p class="muted">Working out the default offer for every customer…</p>`;
+  try {
+    const p = await api("/api/preview", draft);
+    $("#rules-msg").innerHTML = "";
+    const diff = p.after.cost - p.before.cost;
+    const types = ["percent_off", "flat_off", "free_delivery", "bonus_points", "cart_reminder", "no_offer", "holdout"];
+    $("#preview").innerHTML = `<h2>Preview: default offer for every customer</h2>
+      <div class="grid kpis">
+        <div class="card kpi"><div class="label">Cost if everyone used their offer</div><div class="value">${rs(p.after.cost)}</div>
+          <div class="note">${diff === 0 ? "same as now" : (diff > 0 ? "▲ " : "▼ ") + rs(Math.abs(diff)) + " vs current rules"}</div></div>
+        <div class="card kpi"><div class="label">Customers getting a discount</div><div class="value">${p.after.discounts.toLocaleString("en-IN")}</div>
+          <div class="note">now: ${p.before.discounts.toLocaleString("en-IN")}</div></div>
+        <div class="card kpi"><div class="label">Budget covers</div><div class="value">${pct(Math.min(p.budget / Math.max(p.after.cost, 1), 1))}</div>
+          <div class="note">of that cost (${rs(p.budget)} budget)</div></div>
+      </div>
+      <div class="card scroll" style="margin-top:16px" id="preview-table"></div>`;
+    table($("#preview-table"), ["Customer type", ...types.map((t) => OFFER[t])],
+      p.after.table.map((row) => [esc(row.segment), ...types.map((t) => row[t] || `<span class="muted">0</span>`)]));
+  } catch (e) { $("#preview").innerHTML = ""; $("#rules-msg").innerHTML = `<div class="msg bad">${esc(e.message)}</div>`; }
+});
+
+/* ---------- customers ---------- */
+loaders.customers = async () => {
+  const d = await api("/api/customers");
+  kpis($("#c-kpis"), [
+    ["Customers", d.customers.toLocaleString("en-IN")],
+    ["Sorted into the right type", pct(d.match_rate), "vs the hidden true persona"],
+    ["Cart abandonment", pct(d.abandonment), "industry average ≈ 70%"],
+    ["Revenue from top 10% of buyers", pct(d.top10_share), "real stores: 40–50%"],
+  ]);
+  hbar($("#c-seg"), d.by_segment);
+  hbar($("#c-cod"), d.cod_by_tier, pct);
+  cols($("#c-monthly"), d.monthly.map((m) => ({ label: new Date(m.label + "-01").toLocaleString("en", { month: "short", year: "2-digit" }), value: m.value })), undefined, 2);
+  cols($("#c-spend"), d.spend_histogram, (v) => `${v} customers`, 3);
+  loadCustomer();
+};
+async function loadCustomer() {
+  const id = Math.max(1, Math.min(2000, Number($("#c-id").value) || 1));
+  const d = await api(`/api/customer?id=${id}`);
+  const c = d.customer;
+  $("#c-profile").innerHTML = `<b>${esc(c.name)}</b> · ${esc(c.city)} · ${esc(d.segment_label)}
+    <ul class="tight small">
+      <li>${c.orders_total} orders${c.orders_total ? `, last one ${c.recency_days} days ago, average ${rs(c.avg_order_value)}` : ""}</li>
+      <li>Coupon on ${pct(c.coupon_rate)} of orders · churn risk ${c.churn_risk}</li>
+      <li>Favourite: ${esc(c.top_category)} · ${c.sessions_30d} visits in 30 days</li>
+      <li>Cart: ${c.cart_items.length ? c.cart_items.map((i) => `${esc(i.product)} (${rs(i.price)})`).join(", ") : "empty"}</li>
+      <li>${c.reward_points} reward points${c.points_expiring_30d ? `, ${c.points_expiring_30d} expiring this month` : ""}</li>
+    </ul>`;
+  $("#c-menu").innerHTML = `<b>Offers the rules allow</b>${menuList(d.menu)}
+    <p class="small">Control group: ${d.holdout ? "<b>yes</b>, never gets an offer" : "no"}</p>`;
+}
+$("#c-id").addEventListener("change", loadCustomer);
+
+loaders.results();
+</script>
+</body>
+</html>
