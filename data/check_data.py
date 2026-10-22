@@ -6,6 +6,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+sys.stdout.reconfigure(encoding="utf-8")  # so ₹ and emoji print on Windows terminals
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from engine.db import connect  # noqa: E402
 from engine.segments import SEGMENT_LABELS  # noqa: E402
